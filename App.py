@@ -1,92 +1,73 @@
-from time import sleep
-from flask import Flask,jsonify
-import json
-import googleapiclient.discovery
-import googleapiclient.errors
-# from pymongo import MongoClient
-# import pymongo
-from flask_pymongo import PyMongo
-import urllib
+from flask import Flask,jsonify,request
+from flask_pymongo import pymongo
+import fetch_videos_from_API
+import threading
 import database
 
 app = Flask(__name__)
 
-# client = MongoClient('localhost',27017)
-# db = client.Videos
-# app.config['DEBUG']=True
-# app.config['MONGO_URI'] = "mongodb+srv://sartaj16:"+urllib.parse.quote("Sartaj@2000")+"@cluster0.stns21q.mongodb.net/?retryWrites=true&w=majority"
-# mongo = PyMongo(app)
-# db = mongo.Videos
+@app.route("/get_videos", methods=['GET'])
 
-key = 'AIzaSyB4nXuAM5BZ5RsSSHRUpHsNiEEq19CWGK4'
-api_service_name = "youtube"
-api_version = "v3"
-youtube = googleapiclient.discovery.build(api_service_name, api_version, developerKey = key)
-response=[]
+def get_videos():
 
-def define_request(nextPageToken):
-    request = youtube.search().list(
-        part="snippet",
-        order="date",
-        publishedAfter="2022-08-28T00:00:00Z",
-        q="cricket",
-        pageToken=nextPageToken,
-        maxResults=50
-    )
-    return request
+    videos_info = database.db.VideosInfo
 
-@app.route("/", methods=['POST'])
-def main():
-    # try:
-    #     for video in response['items']:
-    #         video_info={}
-    #         if video['snippet']:
-    #             if video['snippet']['title']:
-    #                 video_info['title'] = video['snippet']['title']
-    #             if video['snippet']['description']:
-    #                 video_info['description'] = video['snippet']['description']
-    #             if video['snippet']['description']:
-    #                 video_info['publishing_datetime'] = video['snippet']['publishedAt']
-    #             if video['snippet']['thumbnails']:
-    #                 video_info['thumbnail_urls'] = []
-    #                 for key in video['snippet']['thumbnails'].keys():
-    #                     video_info['thumbnail_urls'].append(video['snippet']['thumbnails'][key]['url'])
-    #             status = database.db.VideosInfo.insert_one(video_info)
-    #     return "Success"
-    # except Exception as e:
-    #     return json.dumps({'error' : str(e)})
-    nextPageToken = ''
-    while True:
-        request = define_request(nextPageToken)
-        response = request.execute()
-        print(list(response.keys()))
-        if 'nextPageToken' not in response.keys():
-            break;
-        else:
-            nextPageToken = response['nextPageToken']
-            for video in response['items']:
-                video_info={}
-                if video['snippet']:
-                    if video['snippet']['title']:
-                        video_info['title'] = video['snippet']['title']
-                    if video['snippet']['description']:
-                        video_info['description'] = video['snippet']['description']
-                    if video['snippet']['description']:
-                        video_info['publishing_datetime'] = video['snippet']['publishedAt']
-                    if video['snippet']['thumbnails']:
-                        video_info['thumbnail_urls'] = []
-                        for key in video['snippet']['thumbnails'].keys():
-                            video_info['thumbnail_urls'].append(video['snippet']['thumbnails'][key]['url'])
-                    status = database.db.VideosInfo.insert_one(video_info)
-            print("While Completed")
-    return nextPageToken
+    offset = int(request.args['offset'])
+    limit = int(request.args['limit'])
+
+    starting_id = videos_info.find().sort('_id',pymongo.ASCENDING)
+    last_id = starting_id[offset]['_id']
+
+    videos = videos_info.find({'_id' : {'$gte': last_id}}).sort('_id',pymongo.ASCENDING).limit(limit)
+
+    all_videos = []
+
+    for video in videos:
+        video_dict={}
+        if 'title' in video.keys():
+            video_dict['title']=video['title']
+        if 'description' in video.keys():
+            video_dict['description']=video['description']
+        if 'publishing_datetime' in video.keys():
+            video_dict['publishing_datetime']=video['publishing_datetime']
+        if 'thumbnail_urls' in video.keys():
+            video_dict['thumbnail_urls']=video['thumbnail_urls']
+        all_videos.append(video_dict)
+
+    next_url = '/get_videos?limit=' + str(limit) + '&offset=' + str(offset + limit)
+    prev_url = '/get_videos?limit=' + str(limit) + '&offset=' + str(min(0, offset - limit))
+
+    return jsonify({'result': all_videos, 'prev_url': prev_url, 'next_url': next_url})
 
 
+@app.route("/search_videos", methods=['GET'])
 
+def search_videos():
 
-# @app.route("/add_video",methods = ['POST'])
-# def add_video():
+    videos_info = database.db.VideosInfo
+
+    query = request.args['query']
+
+    videos = videos_info.find({'$or': [{'title': {'$eq': query}}, {'description' : {'$eq':query}}]})
+
+    all_videos = []
+
+    for video in videos:
+        video_dict={}
+        if 'title' in video.keys():
+            video_dict['title']=video['title']
+        if 'description' in video.keys():
+            video_dict['description']=video['description']
+        if 'publishing_datetime' in video.keys():
+            video_dict['publishing_datetime']=video['publishing_datetime']
+        if 'thumbnail_urls' in video.keys():
+            video_dict['thumbnail_urls']=video['thumbnail_urls']
+        all_videos.append(video_dict)
+
+    return jsonify({'result': all_videos})
 
 
 if __name__ == "__main__":
-  app.run()
+    # x = threading.Thread(target=fetch_videos_from_API.test)
+    # x.start()
+    app.run()
