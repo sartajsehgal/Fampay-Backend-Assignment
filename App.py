@@ -70,4 +70,4 @@ def search_videos():
 if __name__ == "__main__":
     # x = threading.Thread(target=fetch_videos_from_API.test)
     # x.start()
-    app.run()
+    app.run(ost="0.0.0.0", port=5000)

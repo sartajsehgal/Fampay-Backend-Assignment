@@ -1,6 +1,6 @@
 from flask import Flask
 from flask_pymongo import pymongo
-from App import app
+from app import app
 CONNECTION_STRING = "mongodb+srv://sartaj16:sartaj2000@cluster0.stns21q.mongodb.net/?retryWrites=true&w=majority"
 client = pymongo.MongoClient(CONNECTION_STRING)
 db = client.get_database('Videos')
